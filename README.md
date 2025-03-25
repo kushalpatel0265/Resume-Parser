@@ -2,6 +2,10 @@
 
 A resume parsing project powered by Groq's Language Processing Unit (LPU) using the `llama-index-llms-groq` integration. This project extracts text from a PDF resume and uses the Groq LLM (specifically the `llama-3.1-8b-instant` model) to parse key details such as full name, contact information, education, work experience, and skills. The code is provided in both Google Colab and Streamlit app formats.
 
+## Live Demo
+
+Try out the live demo of the Streamlit app here: [Resume Parser Demo](https://resume-parser-0265.streamlit.app/)
+
 ## Features
 
 - **PDF Text Extraction:** Uses PyPDF2 to extract text from uploaded PDF resumes.
