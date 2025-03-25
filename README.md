@@ -6,6 +6,10 @@ A resume parsing project powered by Groq's Language Processing Unit (LPU) using 
 
 Try out the live demo of the Streamlit app here: [Resume Parser Demo](https://resume-parser-0265.streamlit.app/)
 
+## Demo Video
+
+Watch the demo video here: [Demo Video](https://drive.google.com/file/d/1yNqaMlMC1mJiDiaVnpCMFv-SEViSthkw/view?usp=sharing)
+
 ## Features
 
 - **PDF Text Extraction:** Uses PyPDF2 to extract text from uploaded PDF resumes.
