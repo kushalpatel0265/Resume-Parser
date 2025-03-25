@@ -8,7 +8,6 @@ A resume parsing project powered by Groq's Language Processing Unit (LPU) using 
 - **Resume Parsing:** Sends the extracted text to the Groq LLM API to extract structured resume details.
 - **Structured Output:** Formats the parsed details as bullet points for easy reading.
 - **Multiple Interfaces:** Includes a Google Colab notebook version and a Streamlit web app for flexible use.
-- **Hardcoded API Key:** The Groq API key is directly embedded for ease of use (you can update it if needed).
 
 ## Requirements
 
