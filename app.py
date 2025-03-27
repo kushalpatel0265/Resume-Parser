@@ -179,7 +179,7 @@ def combined_matching_score(jd_text: str, resume_text: str, lemma_weight: float 
 
 def main():
     st.title("Resume vs. Job Description Matcher")
-    st.write("Upload a PDF resume and paste a job description. The app will use both lemma-based and semantic matching to compute match scores.")
+    st.write("Paste your Job Description below and upload your PDF resume. The app will display the raw and cleaned resume text, parsed details, and matching scores based on both lemma-based and semantic approaches.")
 
     # 1) Job Description Input
     jd_text = st.text_area("Paste Job Description Here", height=200)
@@ -187,64 +187,60 @@ def main():
     # 2) PDF Upload
     uploaded_file = st.file_uploader("Upload Your Resume (PDF)", type=["pdf"])
 
-    # Action button
     if st.button("Process"):
         if not jd_text.strip():
-            st.error("Please paste a job description.")
+            st.error("Please enter a job description.")
             return
         if not uploaded_file:
             st.error("Please upload a PDF resume.")
             return
 
-        # Extract the PDF resume
-        resume_text_raw = extract_text_from_pdf(uploaded_file)
+        # Extract raw resume text
+        raw_resume_text = extract_text_from_pdf(uploaded_file)
         st.subheader("Raw Resume Text")
-        st.write(resume_text_raw)
+        st.text_area("", raw_resume_text, height=200)
 
-        # Clean with LLM (if available)
+        # Clean resume text using LLM (if available)
+        cleaned_resume_text = clean_resume_with_llm(raw_resume_text)
         st.subheader("Cleaned Resume Text")
-        cleaned_resume_text = clean_resume_with_llm(resume_text_raw)
-        st.write(cleaned_resume_text)
+        st.text_area("", cleaned_resume_text, height=200)
 
-        # Parse structured details (if LLM available)
+        # Parse resume details using LLM (if available)
+        parsed_details = parse_resume_details(cleaned_resume_text)
         st.subheader("Parsed Resume Details (LLM)")
-        details = parse_resume_details(cleaned_resume_text)
-        st.write(details)
+        st.write(parsed_details)
 
-        # Lemma-based matching info
+        # Lemma-based matching details
         lemma_details = lemma_based_match_details(jd_text, cleaned_resume_text)
         st.subheader("Lemma-Based Matching Details")
         st.write(f"**Lemma-Based Similarity Score:** {lemma_details['score']}%")
         st.write("**Matched Lemmas:**")
-        st.write(", ".join(lemma_details["matched"]) if lemma_details["matched"] else "No matched lemmas.")
+        st.write(", ".join(lemma_details["matched"]) if lemma_details["matched"] else "None.")
         st.write("**Unmatched JD Lemmas:**")
         st.write(", ".join(lemma_details["unmatched_jd"]) if lemma_details["unmatched_jd"] else "None.")
         st.write("**Unmatched Resume Lemmas:**")
         st.write(", ".join(lemma_details["unmatched_resume"]) if lemma_details["unmatched_resume"] else "None.")
 
-        # Sentence-level semantic
-        semantic_info = semantic_sentence_matching_details(jd_text, cleaned_resume_text, threshold=0.4)
+        # Semantic matching details (sentence-level)
+        semantic_details = semantic_sentence_matching_details(jd_text, cleaned_resume_text, threshold=0.4)
         st.subheader("Semantic Matching Details")
-        st.write(f"**Overall Semantic Similarity Score:** {semantic_info['overall_semantic_score']}%")
-        
-        st.write("**Matched JD Sentences (threshold 0.4)**")
-        if semantic_info["matched_sentences"]:
-            for sent, sim_val in semantic_info["matched_sentences"]:
-                st.markdown(f"- {sent} (Score: {sim_val}%)")
-        else:
-            st.write("No matched sentences.")
-        
-        st.write("**Unmatched JD Sentences**")
-        if semantic_info["unmatched_sentences"]:
-            for sent, sim_val in semantic_info["unmatched_sentences"]:
-                st.markdown(f"- {sent} (Score: {sim_val}%)")
+        st.write(f"**Overall Semantic Similarity Score:** {semantic_details['overall_semantic_score']}%")
+        st.write("**Matched JD Sentences (with similarity scores):**")
+        if semantic_details["matched_sentences"]:
+            for sent, score in semantic_details["matched_sentences"]:
+                st.markdown(f"- {sent} (Score: {score}%)")
         else:
             st.write("None.")
-        
-        # Combined Score
-        combined = combined_matching_score(jd_text, cleaned_resume_text, 0.5, 0.5)
-        st.subheader(f"Combined Matching Score: {combined}%")
+        st.write("**Unmatched JD Sentences (with similarity scores):**")
+        if semantic_details["unmatched_sentences"]:
+            for sent, score in semantic_details["unmatched_sentences"]:
+                st.markdown(f"- {sent} (Score: {score}%)")
+        else:
+            st.write("None.")
 
+        # Combined matching score
+        combined_score = combined_matching_score(jd_text, cleaned_resume_text, lemma_weight=0.5, sem_weight=0.5)
+        st.subheader(f"Combined Matching Score: {combined_score}%")
 
 if __name__ == "__main__":
     main()
