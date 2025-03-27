@@ -1,6 +1,6 @@
 streamlit
 PyPDF2
-sentence-transformers
+sentence-transformers==2.2.2
 transformers
 nltk
 llama-index-llms-groq
