@@ -1,4 +1,7 @@
+streamlit
+PyPDF2
+sentence-transformers
+transformers
+nltk
 llama-index-llms-groq
 llama-index
-PyPDF2
-streamlit
