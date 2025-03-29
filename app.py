@@ -5,14 +5,18 @@ import nltk
 import PyPDF2
 import streamlit as st
 
-# Download necessary NLTK data
+############################
+# NLTK Data Setup
+############################
 nltk.download("punkt")
 nltk.download("stopwords")
 nltk.download("wordnet")
 nltk.download("omw-1.4")
-nltk.download("punkt_tab")  # Some environments need this
+nltk.download("punkt_tab")  # Some environments require this
 
-# Try importing Groq LLM (if available)
+############################
+# Attempt to Import Groq LLM
+############################
 try:
     from llama_index.llms.groq import Groq
     from llama_index.core.llms import ChatMessage
@@ -20,26 +24,35 @@ try:
 except ImportError:
     USE_GROQ = False
 
-# For semantic embeddings (sentence-transformers)
+############################
+# Attempt to Import Sentence Transformers
+############################
 try:
     from sentence_transformers import SentenceTransformer, util
-except Exception as e:
-    st.error("Error importing sentence_transformers. Please ensure it is installed correctly.")
+except ImportError as e:
+    # If this fails, the app will show an error in the Streamlit interface.
+    st.error("Could not import sentence_transformers. Please ensure it's installed correctly.")
     raise e
 
-# For lemmatization and stopwords
+############################
+# Additional NLTK Tools
+############################
 from nltk.stem import WordNetLemmatizer
 from nltk.corpus import stopwords
 
-# Hardcoded Groq API key (update if needed)
+############################
+# Hardcoded Groq API Key
+############################
 GROQ_API_KEY = "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"
 
-########################################
+############################
 # Helper Functions
-########################################
+############################
 
 def extract_text_from_pdf(pdf_file) -> str:
-    """Extracts text from an uploaded PDF file using PyPDF2."""
+    """
+    Extracts text from an uploaded PDF file using PyPDF2.
+    """
     reader = PyPDF2.PdfReader(pdf_file)
     all_text = []
     for page in reader.pages:
@@ -48,9 +61,13 @@ def extract_text_from_pdf(pdf_file) -> str:
     return "\n".join(all_text)
 
 def clean_resume_with_llm(raw_text: str) -> str:
-    """Uses Groq LLM to clean and standardize the resume text. If unavailable, returns raw text."""
+    """
+    Uses Groq LLM to clean and standardize the resume text.
+    If Groq LLM is unavailable, returns the raw text.
+    """
     if not USE_GROQ:
         return raw_text
+
     system_msg = "You are an AI assistant that cleans and standardizes resume text."
     user_msg = f"Please remove unnecessary formatting and ensure clarity:\n\n{raw_text}"
     llm = Groq(model="llama-3.1-8b-instant", api_key=GROQ_API_KEY)
@@ -62,9 +79,14 @@ def clean_resume_with_llm(raw_text: str) -> str:
     return str(response)
 
 def parse_resume_details(cleaned_text: str) -> str:
-    """Uses Groq LLM to parse cleaned resume text into structured details. Returns a fallback if unavailable."""
+    """
+    Uses Groq LLM to parse the cleaned resume text into structured details
+    (e.g., Name, Contact, Education, Experience, Skills).
+    If Groq LLM is unavailable, returns a fallback message.
+    """
     if not USE_GROQ:
         return "Groq LLM not installed or configured. Skipping structured parse."
+
     system_msg = "You extract key details from resumes (Name, Contact, Education, Experience, Skills)."
     user_msg = f"Parse the following resume and return structured details in bullet points:\n\n{cleaned_text}"
     llm = Groq(model="llama-3.1-8b-instant", api_key=GROQ_API_KEY)
@@ -76,7 +98,10 @@ def parse_resume_details(cleaned_text: str) -> str:
     return str(response)
 
 def lemma_tokenize(text: str) -> set:
-    """Tokenizes text into words, removes stopwords, lemmatizes tokens, and returns a set of lemmas."""
+    """
+    Tokenizes text into words, removes stopwords, lemmatizes tokens,
+    and returns a set of lemmas.
+    """
     lemmatizer = WordNetLemmatizer()
     stop_words = set(stopwords.words("english"))
     sentences = nltk.sent_tokenize(text)
@@ -100,13 +125,20 @@ def lemma_based_match_details(jd_text: str, resume_text: str) -> dict:
     """
     jd_lemmas = lemma_tokenize(jd_text)
     resume_lemmas = lemma_tokenize(resume_text)
+
     if not jd_lemmas or not resume_lemmas:
-        return {"score": 0.0, "matched": [], "unmatched_jd": [], "unmatched_resume": []}
+        return {
+            "score": 0.0,
+            "matched": [],
+            "unmatched_jd": [],
+            "unmatched_resume": []
+        }
+
     intersection = jd_lemmas & resume_lemmas
     union = jd_lemmas | resume_lemmas
-    score = (len(intersection) / len(union)) * 100
+    jaccard = (len(intersection) / len(union)) * 100
     return {
-        "score": round(score, 2),
+        "score": round(jaccard, 2),
         "matched": sorted(list(intersection)),
         "unmatched_jd": sorted(list(jd_lemmas - intersection)),
         "unmatched_resume": sorted(list(resume_lemmas - intersection))
@@ -114,18 +146,25 @@ def lemma_based_match_details(jd_text: str, resume_text: str) -> dict:
 
 def semantic_sentence_matching_details(jd_text: str, resume_text: str, threshold: float = 0.4) -> dict:
     """
-    Splits JD text into sentences and computes cosine similarity for each sentence with the entire resume.
-    Returns overall semantic similarity, and lists of matched and unmatched sentences with their scores.
+    Splits JD text into sentences and computes cosine similarity
+    for each sentence with the entire resume.
+    threshold: the minimal similarity for a sentence to be considered matched
+    Returns a dict containing:
+      - overall_semantic_score: entire JD vs resume similarity (0-100)
+      - matched_sentences: list of (sentence, similarity%) above threshold
+      - unmatched_sentences: list of (sentence, similarity%) below threshold
     """
     model = SentenceTransformer("all-MiniLM-L6-v2")
     jd_emb = model.encode(jd_text, convert_to_tensor=True)
     resume_emb = model.encode(resume_text, convert_to_tensor=True)
+
     overall_sim = float(util.cos_sim(jd_emb, resume_emb)[0][0])
     overall_score = round(overall_sim * 100, 2)
 
     sentences = nltk.sent_tokenize(jd_text)
     matched = []
     unmatched = []
+
     for sent in sentences:
         sent_emb = model.encode(sent, convert_to_tensor=True)
         sim = float(util.cos_sim(sent_emb, resume_emb)[0][0])
@@ -134,6 +173,7 @@ def semantic_sentence_matching_details(jd_text: str, resume_text: str, threshold
             matched.append((sent, sim_percent))
         else:
             unmatched.append((sent, sim_percent))
+
     return {
         "overall_semantic_score": overall_score,
         "matched_sentences": matched,
@@ -141,7 +181,10 @@ def semantic_sentence_matching_details(jd_text: str, resume_text: str, threshold
     }
 
 def semantic_similarity(jd_text: str, resume_text: str) -> float:
-    """Computes overall semantic similarity between JD and resume texts, returning a percentage (0-100)."""
+    """
+    Computes overall semantic similarity between JD and resume text,
+    returning a percentage (0-100).
+    """
     model = SentenceTransformer("all-MiniLM-L6-v2")
     jd_emb = model.encode(jd_text, convert_to_tensor=True)
     res_emb = model.encode(resume_text, convert_to_tensor=True)
@@ -150,30 +193,32 @@ def semantic_similarity(jd_text: str, resume_text: str) -> float:
 
 def combined_matching_score(jd_text: str, resume_text: str, lemma_weight: float = 0.5, sem_weight: float = 0.5) -> float:
     """
-    Computes a combined matching score as a weighted average of the lemma-based similarity
-    and the semantic similarity of the entire texts.
-    Returns a score (0-100).
+    Weighted average of lemma-based similarity & entire-text semantic similarity.
+    Returns final score (0-100).
     """
-    lemma_score = lemma_based_match_details(jd_text, resume_text)["score"]
+    lemma_info = lemma_based_match_details(jd_text, resume_text)
+    lemma_score = lemma_info["score"]
+
     sem_score = semantic_similarity(jd_text, resume_text)
-    return round((lemma_weight * lemma_score) + (sem_weight * sem_score), 2)
-    
+    combined = (lemma_weight * lemma_score) + (sem_weight * sem_score)
+    return round(combined, 2)
+
 ########################################
-# Streamlit App Interface
+# Streamlit App
 ########################################
 
 def main():
     st.title("Resume vs. Job Description Matcher")
-    st.write("Paste a Job Description and upload a PDF resume to see matching scores computed using both lexical and semantic methods.")
+    st.write("Paste a Job Description and upload a PDF resume. The app will compute matching scores using both lexical (lemma-based) and semantic approaches, plus a final combined score.")
 
-    # Job Description Input
-    jd_text = st.text_area("Job Description", height=200)
+    # 1) Job Description Input
+    jd_text = st.text_area("Job Description:", height=200)
 
-    # Resume PDF Upload
+    # 2) PDF Upload
     uploaded_file = st.file_uploader("Upload Your Resume (PDF)", type=["pdf"])
 
     if st.button("Process"):
-
+        # Basic validation
         if not jd_text.strip():
             st.error("Please paste a Job Description.")
             return
@@ -181,13 +226,13 @@ def main():
             st.error("Please upload a PDF resume.")
             return
 
-        # Extract and display raw resume text
-        raw_resume_text = extract_text_from_pdf(uploaded_file)
+        # Extract raw resume text
+        resume_text_raw = extract_text_from_pdf(uploaded_file)
         st.subheader("Raw Resume Text")
-        st.text_area("Raw Text", raw_resume_text, height=200)
+        st.text_area("Raw Text", resume_text_raw, height=200)
 
         # Clean resume text using LLM (if available)
-        cleaned_resume_text = clean_resume_with_llm(raw_resume_text)
+        cleaned_resume_text = clean_resume_with_llm(resume_text_raw)
         st.subheader("Cleaned Resume Text")
         st.text_area("Cleaned Text", cleaned_resume_text, height=200)
 
@@ -196,7 +241,7 @@ def main():
         st.subheader("Parsed Resume Details (LLM)")
         st.write(parsed_details)
 
-        # Lemma-based matching details
+        # Lemma-based matching
         lemma_details = lemma_based_match_details(jd_text, cleaned_resume_text)
         st.subheader("Lemma-Based Matching Details")
         st.markdown(f"**Lemma-Based Similarity Score:** {lemma_details['score']}%")
@@ -204,26 +249,29 @@ def main():
         st.markdown("**Unmatched JD Lemmas:** " + (", ".join(lemma_details["unmatched_jd"]) if lemma_details["unmatched_jd"] else "None"))
         st.markdown("**Unmatched Resume Lemmas:** " + (", ".join(lemma_details["unmatched_resume"]) if lemma_details["unmatched_resume"] else "None"))
 
-        # Semantic sentence-level matching details
-        semantic_details = semantic_sentence_matching_details(jd_text, cleaned_resume_text, threshold=0.4)
+        # Semantic sentence-level matching
+        semantic_info = semantic_sentence_matching_details(jd_text, cleaned_resume_text, threshold=0.4)
         st.subheader("Semantic Matching Details")
-        st.markdown(f"**Overall Semantic Similarity Score:** {semantic_details['overall_semantic_score']}%")
-        st.markdown("**Matched JD Sentences (with similarity %):**")
-        if semantic_details["matched_sentences"]:
-            for sent, score in semantic_details["matched_sentences"]:
-                st.markdown(f"- {sent} (Score: {score}%)")
+        st.markdown(f"**Overall Semantic Similarity Score:** {semantic_info['overall_semantic_score']}%")
+
+        st.markdown("**Matched JD Sentences (above threshold)**")
+        if semantic_info["matched_sentences"]:
+            for sent, sim_percent in semantic_info["matched_sentences"]:
+                st.markdown(f"- {sent} (Score: {sim_percent}%)")
         else:
             st.write("No matched sentences.")
-        st.markdown("**Unmatched JD Sentences (with similarity %):**")
-        if semantic_details["unmatched_sentences"]:
-            for sent, score in semantic_details["unmatched_sentences"]:
-                st.markdown(f"- {sent} (Score: {score}%)")
+
+        st.markdown("**Unmatched JD Sentences**")
+        if semantic_info["unmatched_sentences"]:
+            for sent, sim_percent in semantic_info["unmatched_sentences"]:
+                st.markdown(f"- {sent} (Score: {sim_percent}%)")
         else:
             st.write("None.")
 
-        # Combined overall matching score
+        # Final combined score
         combined_score = combined_matching_score(jd_text, cleaned_resume_text, lemma_weight=0.5, sem_weight=0.5)
         st.subheader(f"Combined Matching Score: {combined_score}%")
+
 
 if __name__ == "__main__":
     main()
