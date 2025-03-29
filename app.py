@@ -30,7 +30,7 @@ except ImportError:
     USE_SEMANTIC = False
 
 # Hardcode your Groq API key (if you have one)
-GROQ_API_KEY = "YOUR_GROQ_API_KEY"
+GROQ_API_KEY = "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"
 
 # Known skill keywords for partial parse
 KNOWN_SKILLS = ["python", "java", "aws", "machine learning", "html", "css", "javascript"]
