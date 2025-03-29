@@ -1,8 +1,8 @@
-streamlit
-PyPDF2
+streamlit==1.22.0
+PyPDF2==3.0.1
 sentence-transformers==2.2.2
-transformers
-nltk
-llama-index-llms-groq
-llama-index
+transformers==4.30.2
+nltk==3.8.1
+llama-index-llms-groq==0.1.4
+llama-index==0.6.27
 huggingface_hub==0.14.1
