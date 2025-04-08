@@ -1,5 +1,6 @@
 import streamlit as st
 import PyPDF2, re, io, nltk, numpy as np
+import os
 
 # ────────── NLTK setup ──────────
 nltk.download("punkt")
@@ -10,11 +11,25 @@ nltk.download("omw-1.4")
 from nltk.corpus import stopwords
 from nltk.stem import WordNetLemmatizer
 
-# ────────── Sentence‑transformers ──────────
+# ────────── Sentence‑Transformers Setup ──────────
 from sentence_transformers import SentenceTransformer, util
-EMB_MODEL = SentenceTransformer("all-MiniLM-L6-v2")
 
-# ────────── TF‑IDF ──────────
+# Optional: use a Hugging Face token (set this in your environment or Streamlit secrets)
+HF_TOKEN = os.getenv("HF_TOKEN", "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")  # set your Hugging Face token here if needed
+
+if HF_TOKEN:
+    from huggingface_hub import login
+    login(token=HF_TOKEN)
+
+# Try to load a locally cached model. If not available, fall back to downloading.
+MODEL_PATH = "./all-MiniLM-L6-v2"  # ensure this directory exists in your app folder if caching locally
+try:
+    EMB_MODEL = SentenceTransformer(MODEL_PATH)
+except Exception as e:
+    st.warning("Local model not found or failed to load, attempting to download model from Hugging Face.")
+    EMB_MODEL = SentenceTransformer("all-MiniLM-L6-v2")
+
+# ────────── TF‑IDF Imports ──────────
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 
@@ -22,20 +37,20 @@ from sklearn.metrics.pairwise import cosine_similarity
 try:
     from llama_index.llms.groq import Groq
     from llama_index.core.llms import ChatMessage
-    GROQ_API_KEY = "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"        # <— add key or leave blank
+    GROQ_API_KEY = os.getenv("GROQ_API_KEY", "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")  # set your Groq API key here if using Groq
     USE_GROQ = bool(GROQ_API_KEY)
 except ImportError:
     USE_GROQ = False
 
 # ────────── Config / Weights ──────────
-WEIGHT_TFIDF  = 0.30   # 30 %
-WEIGHT_SEMANT = 0.70   # 70 %
+WEIGHT_TFIDF  = 0.30   # 30%
+WEIGHT_SEMANT = 0.70   # 70%
 SKILL_SYNONYMS = {"js": "javascript", "py": "python", "node": "node.js"}
 
-# ────────── Helper functions ──────────
+# ────────── Helper Functions ──────────
 def pdf_to_text(pdf_bytes: bytes) -> str:
     reader = PyPDF2.PdfReader(io.BytesIO(pdf_bytes))
-    return "\n".join(p.extract_text() or "" for p in reader.pages)
+    return "\n".join(page.extract_text() or "" for page in reader.pages)
 
 def apply_synonyms(txt: str) -> str:
     out = txt.lower()
@@ -57,8 +72,8 @@ def llm_refine(raw: str, partial: dict) -> str:
         return "(LLM disabled)\n" + str(partial)
     system = "You finalize resume data, removing incorrect info and summarizing."
     user   = f"""Partial parse:
-Phones:{partial['phones']}
-Emails:{partial['emails']}
+Phones: {partial['phones']}
+Emails: {partial['emails']}
 
 Resume:
 {raw}
@@ -83,7 +98,7 @@ def chunk_sem_score(jd: str, res: str) -> float:
     if not jd_lines or not res_pars:
         return 0.0
     res_emb = EMB_MODEL.encode(res_pars, convert_to_tensor=True)
-    sims=[]
+    sims = []
     for line in jd_lines:
         line_emb = EMB_MODEL.encode(line, convert_to_tensor=True)
         sims.append(float(util.cos_sim(line_emb, res_emb)[0].max()))
@@ -92,7 +107,7 @@ def chunk_sem_score(jd: str, res: str) -> float:
 def final_score(tfidf_val: float, sem_val: float) -> float:
     return min(round(tfidf_val*WEIGHT_TFIDF + sem_val*WEIGHT_SEMANT, 2), 100.0)
 
-# ────────── Streamlit UI ──────────
+# ────────── Streamlit User Interface ──────────
 st.title("Resume ↔ Job‑Description Matcher (TF‑IDF + Semantic)")
 
 jd_text = st.text_area("Paste Job Description", height=180)
@@ -106,21 +121,24 @@ if st.button("Process"):
         st.error("Please upload a PDF resume.")
         st.stop()
 
+    # Extract text from the uploaded PDF
     raw = pdf_to_text(pdf_file.read())
     st.subheader("Raw Resume Text")
     st.text_area("", raw, height=200)
 
-    # synonym replacement
+    # Apply synonym replacement
     resume_syn = apply_synonyms(raw)
 
-    # code parse
+    # Use regex-based code parse for phones and emails
     partial = code_parse(resume_syn)
-    st.subheader("Code‑Based Parse"); st.json(partial)
+    st.subheader("Code‑Based Parse")
+    st.json(partial)
 
-    # LLM refine
-    st.subheader("LLM Summary"); st.write(llm_refine(raw, partial))
+    # Generate an LLM refined summary if available
+    st.subheader("LLM Summary")
+    st.write(llm_refine(raw, partial))
 
-    # Scores
+    # Calculate matching scores
     tf_val  = tfidf_score(jd_text, resume_syn)
     sem_val = chunk_sem_score(jd_text, resume_syn)
     final   = final_score(tf_val, sem_val)
