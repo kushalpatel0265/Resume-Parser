@@ -1,8 +1,10 @@
 streamlit
 PyPDF2
 nltk
+numpy
 sentence-transformers
-transformers
 scikit-learn
-llama-index-llms-groq
+transformers
+torch
+huggingface_hub
 llama-index
