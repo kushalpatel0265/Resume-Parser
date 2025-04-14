@@ -26,7 +26,6 @@ MODEL_PATH = "./all-MiniLM-L6-v2"  # ensure this directory exists in your app fo
 try:
     EMB_MODEL = SentenceTransformer(MODEL_PATH)
 except Exception as e:
-    st.warning("Local model not found or failed to load, attempting to download model from Hugging Face.")
     EMB_MODEL = SentenceTransformer("all-MiniLM-L6-v2")
 
 # ────────── TF‑IDF Imports ──────────
